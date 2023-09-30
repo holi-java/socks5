@@ -12,13 +12,7 @@ use tokio::{
     net::TcpStream,
 };
 
-const VER: u8 = 0x5;
-const NO_AUTH: u8 = 0x0;
-const OK: u8 = 0x0;
-const CONNECT: u8 = 0x1;
-const RSV: u8 = 0x0;
-const IPV4: u8 = 0x1;
-const UNSPECIFIED_SOCKET_ADDR: [u8; 6] = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0];
+include!("../src/constant.rs");
 
 #[tokio::test]
 async fn no_auth() {

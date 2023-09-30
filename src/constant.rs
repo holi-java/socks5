@@ -1,0 +1,7 @@
+pub const VER: u8 = 0x5;
+pub const NO_AUTH: u8 = 0x0;
+pub const OK: u8 = 0x0;
+pub const CONNECT: u8 = 0x1;
+pub const RSV: u8 = 0x0;
+pub const IPV4: u8 = 0x1;
+pub const UNSPECIFIED_SOCKET_ADDR: [u8; 6] = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0];

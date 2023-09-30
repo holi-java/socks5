@@ -1,19 +1,13 @@
-use std::net::SocketAddr;
+mod constant;
 
+use constant::*;
+use std::net::SocketAddr;
 use tokio::{
     io::{copy_bidirectional, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
 
 type IOResult<T> = std::io::Result<T>;
-
-pub const VER: u8 = 0x5;
-pub const NO_AUTH: u8 = 0x0;
-pub const OK: u8 = 0x0;
-pub const CONNECT: u8 = 0x1;
-pub const RSV: u8 = 0x0;
-pub const IPV4: u8 = 0x1;
-pub const UNSPECIFIED_SOCKET_ADDR: [u8; 6] = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0];
 
 /// Just used as typealias only for bounded generic parameters.
 trait Stream: AsyncRead + AsyncWrite + Unpin {}
