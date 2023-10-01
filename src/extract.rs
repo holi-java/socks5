@@ -8,12 +8,12 @@ macro_rules! extract {
         ::concat_idents::concat_idents!(method = try_extract, _, $name {
             #[cold]
             #[inline(always)]
-            pub async fn method<T: UnpinAsyncRead>(mut client: T) -> Result<(T, u8)> {
+            pub async fn method<T: UnpinAsyncRead>(mut client: T) -> Result<u8> {
                 let $name = client.read_u8().await?;
                 if $name $op $expected {
                     return Err($err);
                 }
-                return Ok((client, $name));
+                return Ok($name);
             }
         });
     };

@@ -11,7 +11,8 @@ pub struct Negotiation<T>(pub T);
 
 impl<T: Stream> Negotiation<T> {
     pub async fn run(self) -> Result<T> {
-        let (mut client, _nmethods) = try_extract_methods(self.0).await?;
+        let mut client = self.0;
+        let _nmethods = try_extract_methods(&mut client).await?;
         client.write_all(&[VER, OK]).await?;
         Ok(client)
     }
@@ -19,11 +20,9 @@ impl<T: Stream> Negotiation<T> {
 
 extract!(nmethods == 0 => Error::NoAuthMethods);
 
-async fn try_extract_methods<T: UnpinAsyncRead>(client: T) -> Result<(T, Vec<u8>)> {
-    let client = try_extract_version(client).await?.0;
-    let (mut client, nmethods) = try_extract_nmethods(client)
-        .await
-        .map(|(a, b)| (a, b as usize))?;
+async fn try_extract_methods<T: UnpinAsyncRead>(client: &mut T) -> Result<Vec<u8>> {
+    _ = try_extract_version(&mut *client).await?;
+    let nmethods = try_extract_nmethods(&mut *client).await.map(usize::from)?;
     let mut buf = unsafe {
         let mut buf = Vec::with_capacity(nmethods);
         #[allow(clippy::uninit_vec)]
@@ -31,7 +30,7 @@ async fn try_extract_methods<T: UnpinAsyncRead>(client: T) -> Result<(T, Vec<u8>
         buf
     };
     client.read_exact(&mut buf).await?;
-    Ok((client, buf))
+    Ok(buf)
 }
 
 #[cfg(test)]
@@ -48,8 +47,8 @@ mod tests {
 
     #[tokio::test]
     async fn no_auth_negotiation() {
-        let (mut client, server) = duplex(100);
-        let negotiation = Negotiation(server);
+        let (mut client, mut server) = duplex(100);
+        let negotiation = Negotiation(&mut server);
         client.write_all(&[VER, 1, NO_AUTH]).await.unwrap();
 
         let result = negotiation.run().await;
@@ -60,8 +59,8 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_err_version() {
-        let (mut client, server) = duplex(100);
-        let negotiation = Negotiation(server);
+        let (mut client, mut server) = duplex(100);
+        let negotiation = Negotiation(&mut server);
         client.write_all(&[0x6, 1, NO_AUTH]).await.unwrap();
 
         let err = negotiation.run().await.unwrap_err();
@@ -71,8 +70,8 @@ mod tests {
 
     #[tokio::test]
     async fn fails_without_any_authentication_methods() {
-        let (mut client, server) = duplex(100);
-        let negotiation = Negotiation(server);
+        let (mut client, mut server) = duplex(100);
+        let negotiation = Negotiation(&mut server);
         client.write_all(&[0x5, 0]).await.unwrap();
 
         let err = negotiation.run().await.unwrap_err();

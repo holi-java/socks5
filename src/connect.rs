@@ -14,7 +14,8 @@ pub struct Connect<T>(pub T);
 
 impl<T: Stream> Connect<T> {
     pub async fn run(self) -> Result<(T, SocketAddr)> {
-        let (mut client, addr) = try_extract_addr(self.0).await?;
+        let mut client = self.0;
+        let addr = try_extract_addr(&mut client).await?;
         client.write_all(&[VER, OK, RSV, IPV4]).await?;
         client.write_all(&UNSPECIFIED_SOCKET_ADDR).await?;
         Ok((client, addr))
@@ -23,14 +24,14 @@ impl<T: Stream> Connect<T> {
 
 extract!(connect_cmd != CONNECT => BadCommand(connect_cmd));
 
-async fn try_extract_addr<T: UnpinAsyncRead>(client: T) -> Result<(T, SocketAddr)> {
-    let (client, _) = try_extract_version(client).await?;
-    let (client, _) = try_extract_connect_cmd(client).await?;
-    let (mut client, _) = try_extract_rsv(client).await?;
+async fn try_extract_addr<T: UnpinAsyncRead>(client: &mut T) -> Result<SocketAddr> {
+    _ = try_extract_version(&mut *client).await?;
+    _ = try_extract_connect_cmd(&mut *client).await?;
+    _ = try_extract_rsv(&mut *client).await?;
     let _atype = client.read_u8().await?;
     let ip = client.read_u32().await?;
     let port = client.read_u16().await?;
-    Ok((client, SocketAddr::from((ip.to_be_bytes(), port))))
+    Ok(SocketAddr::from((ip.to_be_bytes(), port)))
 }
 
 #[cfg(test)]
@@ -48,8 +49,8 @@ mod tests {
 
     #[tokio::test]
     async fn connect() {
-        let (mut client, server) = duplex(usize::MAX);
-        let connect = Connect(server);
+        let (mut client, mut server) = duplex(usize::MAX);
+        let connect = Connect(&mut server);
         client
             .write_all(&[VER, CONNECT, RSV, IPV4, 1, 2, 3, 4, 5, 6])
             .await
@@ -65,8 +66,8 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_bad_version() {
-        let (mut client, server) = duplex(usize::MAX);
-        let connect = Connect(server);
+        let (mut client, mut server) = duplex(usize::MAX);
+        let connect = Connect(&mut server);
         client
             .write_all(&[0x6, CONNECT, RSV, IPV4, 1, 2, 3, 4, 5, 6])
             .await
@@ -78,8 +79,8 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_bad_cmd() {
-        let (mut client, server) = duplex(usize::MAX);
-        let connect = Connect(server);
+        let (mut client, mut server) = duplex(usize::MAX);
+        let connect = Connect(&mut server);
         client
             .write_all(&[VER, 0x6, RSV, IPV4, 1, 2, 3, 4, 5, 6])
             .await
@@ -91,8 +92,8 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_bad_rsv() {
-        let (mut client, server) = duplex(usize::MAX);
-        let connect = Connect(server);
+        let (mut client, mut server) = duplex(usize::MAX);
+        let connect = Connect(&mut server);
         client
             .write_all(&[VER, CONNECT, 0x1, IPV4, 1, 2, 3, 4, 5, 6])
             .await
