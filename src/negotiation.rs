@@ -1,7 +1,8 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::constant::{OK, VER};
-use crate::extract::{try_extract_nmethods, try_extract_version};
+use crate::error::Error;
+use crate::extract::try_extract_version;
 use crate::marker::{Stream, UnpinAsyncRead};
 use crate::Result;
 
@@ -15,6 +16,8 @@ impl<T: Stream> Negotiation<T> {
         Ok(client)
     }
 }
+
+extractor!(nmethods == 0 => Error::NoAuthMethods);
 
 async fn try_extract_methods<T: UnpinAsyncRead>(client: T) -> Result<(T, Vec<u8>)> {
     let client = try_extract_version(client).await?.0;

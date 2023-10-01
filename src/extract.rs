@@ -1,3 +1,4 @@
+use crate::constant::RSV;
 use crate::error::Error::*;
 use crate::{constant::VER, marker::UnpinAsyncRead, Result};
 use tokio::io::AsyncReadExt;
@@ -19,4 +20,4 @@ macro_rules! extractor {
 }
 
 extractor!(version != VER => BadVersion(version));
-extractor!(nmethods == 0 => NoAuthMethods);
+extractor!(rsv != RSV => BadRSV(rsv));

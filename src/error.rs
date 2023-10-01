@@ -4,6 +4,8 @@ use std::io;
 pub enum Error {
     BadVersion(u8),
     NoAuthMethods,
+    BadCommand(u8),
+    BadRSV(u8),
     IO(io::Error),
 }
 

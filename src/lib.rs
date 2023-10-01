@@ -1,5 +1,6 @@
 #[macro_use]
 mod extract;
+mod connect;
 mod constant;
 mod error;
 mod marker;
@@ -7,13 +8,12 @@ mod negotiation;
 #[cfg(test)]
 mod test;
 
-use constant::*;
+use connect::Connect;
 use error::Error;
 use marker::Stream;
 use negotiation::Negotiation;
-use std::net::SocketAddr;
 use tokio::{
-    io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt},
+    io::copy_bidirectional,
     net::{TcpListener, TcpStream},
 };
 
@@ -28,18 +28,10 @@ pub async fn start(port: u16) -> Result<()> {
 
 async fn run<S: Stream>(client: S) -> Result<()> {
     let negotiation = Negotiation(client);
-    let mut client = negotiation.run().await?;
+    let client = negotiation.run().await?;
 
-    // Connect
-    let _version = client.read_u8().await?;
-    let _cmd = client.read_u8().await?;
-    let _rsv = client.read_u8().await?;
-    let _atype = client.read_u8().await?;
-    let ip = client.read_u32().await?;
-    let port = client.read_u16().await?;
-    let addr = SocketAddr::from((ip.to_be_bytes(), port));
-    client.write_all(&[VER, OK, RSV, IPV4]).await?;
-    client.write_all(&UNSPECIFIED_SOCKET_ADDR).await?;
+    let connect = Connect(client);
+    let (mut client, addr) = connect.run().await?;
 
     // Send
     let mut upstream = TcpStream::connect(addr).await?;
