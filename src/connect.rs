@@ -10,16 +10,12 @@ use crate::{
     Result,
 };
 
-pub struct Connect<T>(pub T);
+#[derive(Debug)]
+pub struct Connect;
 
-impl<T: Stream> Connect<T> {
-    pub async fn run(mut self) -> Result<(T, SocketAddr)> {
-        let addr = Self::process(&mut self.0).await?;
-        Ok((self.0, addr))
-    }
-
-    pub async fn process(client: &mut T) -> Result<SocketAddr> {
-        let addr = try_extract_addr(client).await?;
+impl Connect {
+    pub async fn run<S: Stream>(self, mut client: S) -> Result<SocketAddr> {
+        let addr = try_extract_addr(&mut client).await?;
         client.write_all(&[VER, OK, RSV, IPV4]).await?;
         client.write_all(&UNSPECIFIED_SOCKET_ADDR).await?;
         Ok(addr)
@@ -54,13 +50,13 @@ mod tests {
     #[tokio::test]
     async fn connect() {
         let (mut client, mut server) = duplex(usize::MAX);
-        let connect = Connect(&mut server);
+        let connect = Connect;
         client
             .write_all(&[VER, CONNECT, RSV, IPV4, 1, 2, 3, 4, 5, 6])
             .await
             .unwrap();
 
-        let (_, addr): (_, SocketAddr) = connect.run().await.unwrap();
+        let addr: SocketAddr = connect.run(&mut server).await.unwrap();
         assert_eq!(addr, "1.2.3.4:1286".parse().unwrap());
 
         let response = client.read_exact_bytes::<10>().await.unwrap();
@@ -71,39 +67,39 @@ mod tests {
     #[tokio::test]
     async fn fails_with_bad_version() {
         let (mut client, mut server) = duplex(usize::MAX);
-        let connect = Connect(&mut server);
+        let connect = Connect;
         client
             .write_all(&[0x6, CONNECT, RSV, IPV4, 1, 2, 3, 4, 5, 6])
             .await
             .unwrap();
 
-        let err = connect.run().await.unwrap_err();
+        let err = connect.run(&mut server).await.unwrap_err();
         assert!(matches!(err, BadVersion(0x6)));
     }
 
     #[tokio::test]
     async fn fails_with_bad_cmd() {
         let (mut client, mut server) = duplex(usize::MAX);
-        let connect = Connect(&mut server);
+        let connect = Connect;
         client
             .write_all(&[VER, 0x6, RSV, IPV4, 1, 2, 3, 4, 5, 6])
             .await
             .unwrap();
 
-        let err = connect.run().await.unwrap_err();
+        let err = connect.run(&mut server).await.unwrap_err();
         assert!(matches!(err, BadCommand(0x6)));
     }
 
     #[tokio::test]
     async fn fails_with_bad_rsv() {
         let (mut client, mut server) = duplex(usize::MAX);
-        let connect = Connect(&mut server);
+        let connect = Connect;
         client
             .write_all(&[VER, CONNECT, 0x1, IPV4, 1, 2, 3, 4, 5, 6])
             .await
             .unwrap();
 
-        let err = connect.run().await.unwrap_err();
+        let err = connect.run(&mut server).await.unwrap_err();
         assert!(matches!(err, BadRSV(0x1)));
     }
 }

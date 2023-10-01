@@ -7,16 +7,11 @@ use crate::marker::{Stream, UnpinAsyncRead};
 use crate::Result;
 
 #[derive(Debug)]
-pub struct Negotiation<T>(pub T);
+pub struct Negotiation;
 
-impl<T: Stream> Negotiation<T> {
-    pub async fn run(mut self) -> Result<T> {
-        Self::process(&mut self.0).await?;
-        Ok(self.0)
-    }
-
-    pub async fn process(client: &mut T) -> Result<()> {
-        let _nmethods = try_extract_methods(&mut *client).await?;
+impl Negotiation {
+    pub async fn run<S: Stream>(self, mut client: S) -> Result<()> {
+        let _nmethods = try_extract_methods(&mut client).await?;
         client.write_all(&[VER, OK]).await?;
         Ok(())
     }
@@ -52,10 +47,10 @@ mod tests {
     #[tokio::test]
     async fn no_auth_negotiation() {
         let (mut client, mut server) = duplex(100);
-        let negotiation = Negotiation(&mut server);
+        let negotiation = Negotiation;
         client.write_all(&[VER, 1, NO_AUTH]).await.unwrap();
 
-        let result = negotiation.run().await;
+        let result = negotiation.run(&mut server).await;
 
         assert!(result.is_ok());
         assert_eq!(client.read_exact_bytes().await.unwrap(), [VER, OK]);
@@ -64,10 +59,10 @@ mod tests {
     #[tokio::test]
     async fn fails_with_err_version() {
         let (mut client, mut server) = duplex(100);
-        let negotiation = Negotiation(&mut server);
+        let negotiation = Negotiation;
         client.write_all(&[0x6, 1, NO_AUTH]).await.unwrap();
 
-        let err = negotiation.run().await.unwrap_err();
+        let err = negotiation.run(&mut server).await.unwrap_err();
 
         assert!(matches!(err, BadVersion(ver) if ver == 0x6));
     }
@@ -75,10 +70,10 @@ mod tests {
     #[tokio::test]
     async fn fails_without_any_authentication_methods() {
         let (mut client, mut server) = duplex(100);
-        let negotiation = Negotiation(&mut server);
+        let negotiation = Negotiation;
         client.write_all(&[0x5, 0]).await.unwrap();
 
-        let err = negotiation.run().await.unwrap_err();
+        let err = negotiation.run(&mut server).await.unwrap_err();
 
         assert!(matches!(err, NoAuthMethods));
     }

@@ -3,15 +3,11 @@ use tokio::io::copy_bidirectional;
 use crate::marker::Stream;
 use crate::Result;
 
-pub struct Forward<A, B>(pub A, pub B);
+pub struct Forward<U>(pub U);
 
-impl<A: Stream, B: Stream> Forward<A, B> {
-    pub async fn run(self) -> Result<()> {
-        Self::process(self.0, self.1).await
-    }
-
-    pub async fn process<D: Stream, U: Stream>(mut client: D, mut upstream: U) -> Result<()> {
-        copy_bidirectional(&mut client, &mut upstream).await?;
+impl<U: Stream> Forward<U> {
+    pub async fn run<S: Stream>(mut self, mut client: S) -> Result<()> {
+        copy_bidirectional(&mut client, &mut self.0).await?;
         Ok(())
     }
 }
@@ -28,8 +24,8 @@ mod tests {
     async fn copy_bidirectional() {
         let (mut a, a2) = duplex(usize::MAX);
         let (mut b, b2) = duplex(usize::MAX);
-        let forward = Forward(a2, b2);
-        tokio::spawn(forward.run());
+        let forward = Forward(a2);
+        tokio::spawn(forward.run(b2));
 
         a.write_all(&[1, 2]).await.unwrap();
         b.write_all(&[3, 4]).await.unwrap();

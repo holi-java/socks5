@@ -31,32 +31,32 @@ pub async fn start(port: u16) -> Result<()> {
     }
 }
 
-enum Sock5<T, U = TcpStream> {
-    Negotiation(Negotiation<T>),
-    Connect(Connect<T>),
-    Forward(Forward<T, U>),
+enum Sock5<U = TcpStream> {
+    Negotiation(Negotiation),
+    Connect(Connect),
+    Forward(Forward<U>),
 }
 
-impl<T: Stream> Sock5<T> {
-    pub async fn starts(stream: T) -> Result<()> {
-        Self::process(stream).await
+impl Sock5 {
+    pub async fn starts<S: Stream>(client: S) -> Result<()> {
+        Self::process(client).await
     }
 }
 
-impl<'a, T: Stream, U> Sock5<T, U>
+impl<'a, U> Sock5<U>
 where
     U: for<'b> Upstream<'b> + Stream,
     <U as Upstream<'a>>::Output: Future<Output = io::Result<U>>,
 {
-    pub async fn process(stream: T) -> Result<()> {
-        let mut stage = Continue(Ok(Self::Negotiation(Negotiation(stream))));
+    pub async fn process<S: Stream>(mut client: S) -> Result<()> {
+        let mut stage = Continue(Ok(Self::Negotiation(Negotiation)));
         while let Continue(current) = stage {
-            stage = current?.run().await;
+            stage = current?.run(&mut client).await;
         }
         Ok(())
     }
 
-    async fn run(self) -> ControlFlow<(), Result<Self>> {
+    async fn run<S: Stream>(self, client: S) -> ControlFlow<(), Result<Self>> {
         macro_rules! try_await {
             ($future: expr) => {
                 match $future.await {
@@ -68,14 +68,15 @@ where
 
         match self {
             Sock5::Negotiation(stage) => {
-                Continue(Ok(Self::Connect(Connect(try_await!(stage.run())))))
+                try_await!(stage.run(client));
+                Continue(Ok(Self::Connect(Connect)))
             }
             Sock5::Connect(stage) => {
-                let (client, addr) = try_await!(stage.run());
+                let addr = try_await!(stage.run(client));
                 let upstream = try_await!(U::connect(addr));
-                Continue(Ok(Self::Forward(Forward(client, upstream))))
+                Continue(Ok(Self::Forward(Forward(upstream))))
             }
-            Sock5::Forward(stage) => Break(try_await!(stage.run())),
+            Sock5::Forward(stage) => Break(try_await!(stage.run(client))),
         }
     }
 }
