@@ -3,6 +3,7 @@ mod extract;
 mod connect;
 mod constant;
 mod error;
+mod forward;
 mod marker;
 mod negotiation;
 #[cfg(test)]
@@ -10,12 +11,10 @@ mod test;
 
 use connect::Connect;
 use error::Error;
+use forward::Forward;
 use marker::Stream;
 use negotiation::Negotiation;
-use tokio::{
-    io::copy_bidirectional,
-    net::{TcpListener, TcpStream},
-};
+use tokio::net::{TcpListener, TcpStream};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -31,10 +30,9 @@ async fn run<S: Stream>(client: S) -> Result<()> {
     let client = negotiation.run().await?;
 
     let connect = Connect(client);
-    let (mut client, addr) = connect.run().await?;
+    let (client, addr) = connect.run().await?;
 
-    // Send
-    let mut upstream = TcpStream::connect(addr).await?;
-    _ = copy_bidirectional(&mut upstream, &mut client).await?;
+    let upstream = TcpStream::connect(addr).await?;
+    Forward(client, upstream).run().await?;
     Ok(())
 }
