@@ -13,12 +13,16 @@ use crate::{
 pub struct Connect<T>(pub T);
 
 impl<T: Stream> Connect<T> {
-    pub async fn run(self) -> Result<(T, SocketAddr)> {
-        let mut client = self.0;
-        let addr = try_extract_addr(&mut client).await?;
+    pub async fn run(mut self) -> Result<(T, SocketAddr)> {
+        let addr = Self::process(&mut self.0).await?;
+        Ok((self.0, addr))
+    }
+
+    pub async fn process(client: &mut T) -> Result<SocketAddr> {
+        let addr = try_extract_addr(client).await?;
         client.write_all(&[VER, OK, RSV, IPV4]).await?;
         client.write_all(&UNSPECIFIED_SOCKET_ADDR).await?;
-        Ok((client, addr))
+        Ok(addr)
     }
 }
 

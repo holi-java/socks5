@@ -6,8 +6,12 @@ use crate::Result;
 pub struct Forward<A, B>(pub A, pub B);
 
 impl<A: Stream, B: Stream> Forward<A, B> {
-    pub async fn run(mut self) -> Result<()> {
-        copy_bidirectional(&mut self.0, &mut self.1).await?;
+    pub async fn run(self) -> Result<()> {
+        Self::process(self.0, self.1).await
+    }
+
+    pub async fn process<D: Stream, U: Stream>(mut client: D, mut upstream: U) -> Result<()> {
+        copy_bidirectional(&mut client, &mut upstream).await?;
         Ok(())
     }
 }

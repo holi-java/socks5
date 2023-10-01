@@ -10,11 +10,15 @@ use crate::Result;
 pub struct Negotiation<T>(pub T);
 
 impl<T: Stream> Negotiation<T> {
-    pub async fn run(self) -> Result<T> {
-        let mut client = self.0;
-        let _nmethods = try_extract_methods(&mut client).await?;
+    pub async fn run(mut self) -> Result<T> {
+        Self::process(&mut self.0).await?;
+        Ok(self.0)
+    }
+
+    pub async fn process(client: &mut T) -> Result<()> {
+        let _nmethods = try_extract_methods(&mut *client).await?;
         client.write_all(&[VER, OK]).await?;
-        Ok(client)
+        Ok(())
     }
 }
 
