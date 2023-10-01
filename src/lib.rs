@@ -4,6 +4,8 @@ mod constant;
 mod error;
 mod marker;
 mod negotiation;
+#[cfg(test)]
+mod test;
 
 use constant::*;
 use error::Error;
@@ -25,7 +27,7 @@ pub async fn start(port: u16) -> Result<()> {
 }
 
 async fn run<S: Stream>(client: S) -> Result<()> {
-    let negotiation = Negotiation::try_unpack(client).await?;
+    let negotiation = Negotiation(client);
     let mut client = negotiation.run().await?;
 
     // Connect
