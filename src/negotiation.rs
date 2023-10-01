@@ -17,7 +17,7 @@ impl<T: Stream> Negotiation<T> {
     }
 }
 
-extractor!(nmethods == 0 => Error::NoAuthMethods);
+extract!(nmethods == 0 => Error::NoAuthMethods);
 
 async fn try_extract_methods<T: UnpinAsyncRead>(client: T) -> Result<(T, Vec<u8>)> {
     let client = try_extract_version(client).await?.0;

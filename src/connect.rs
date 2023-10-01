@@ -21,7 +21,7 @@ impl<T: Stream> Connect<T> {
     }
 }
 
-extractor!(connect_cmd != CONNECT => BadCommand(connect_cmd));
+extract!(connect_cmd != CONNECT => BadCommand(connect_cmd));
 
 async fn try_extract_addr<T: UnpinAsyncRead>(client: T) -> Result<(T, SocketAddr)> {
     let (client, _) = try_extract_version(client).await?;

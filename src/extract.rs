@@ -3,7 +3,7 @@ use crate::error::Error::*;
 use crate::{constant::VER, marker::UnpinAsyncRead, Result};
 use tokio::io::AsyncReadExt;
 
-macro_rules! extractor {
+macro_rules! extract {
     ($name: ident $op:tt $expected: expr => $err: expr) => {
         ::concat_idents::concat_idents!(method = try_extract, _, $name {
             #[cold]
@@ -19,5 +19,5 @@ macro_rules! extractor {
     };
 }
 
-extractor!(version != VER => BadVersion(version));
-extractor!(rsv != RSV => BadRSV(rsv));
+extract!(version != VER => BadVersion(version));
+extract!(rsv != RSV => BadRSV(rsv));
