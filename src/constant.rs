@@ -5,3 +5,5 @@ pub const CONNECT: u8 = 0x1;
 pub const RSV: u8 = 0x0;
 pub const IPV4: u8 = 0x1;
 pub const UNSPECIFIED_SOCKET_ADDR: [u8; 6] = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0];
+pub const NO_ACCEPTABLE_METHODS: u8 = 0xFF;
+pub const CONNECT_DENIED: u8 = 0x02;

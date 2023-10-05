@@ -50,6 +50,26 @@ async fn no_auth() {
     assert!(response.contains("百度一下"), "{}", response);
 }
 
+#[tokio::test]
+async fn shutdown_bad_request() {
+    let port = 1081;
+    tokio::spawn(socks5::start(port));
+    _ = tokio::spawn(async {}).await;
+    let mut client = TcpStream::connect(format!("127.0.0.1:{port}"))
+        .await
+        .unwrap();
+
+    // Negotiation
+    client.write_all(&[VER, 0]).await.unwrap();
+    assert_eq!(
+        client.read_exact_bytes().await.unwrap(),
+        [VER, NO_ACCEPTABLE_METHODS]
+    );
+
+    let mut buf = [0; 1];
+    assert_eq!(client.read(&mut buf).await.unwrap(), 0);
+}
+
 fn resolve<T: ToSocketAddrs>(addr: T) -> io::Result<[u8; 6]> {
     addr.to_socket_addrs()?
         .find(SocketAddr::is_ipv4)

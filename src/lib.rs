@@ -12,17 +12,20 @@ mod test;
 use std::{
     io,
     ops::ControlFlow::{self, *},
+    pin::Pin,
 };
 
 use connect::Connect;
+use core::future::Future;
 use error::Error;
 use forward::Forward;
-use futures_util::{future::BoxFuture, Future};
 use marker::Stream;
 use negotiation::Negotiation;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 
 type Result<T> = std::result::Result<T, Error>;
+type IOResult<T> = std::io::Result<T>;
+type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub async fn start(port: u16) -> Result<()> {
     let server = TcpListener::bind(format!("127.0.0.1:{port}")).await?;
@@ -38,7 +41,7 @@ enum Sock5<U = TcpStream> {
 }
 
 impl Sock5 {
-    pub async fn starts<S: Stream>(client: S) -> Result<()> {
+    pub async fn starts<S: Stream>(client: S) -> IOResult<()> {
         Self::process(client).await
     }
 }
@@ -46,9 +49,16 @@ impl Sock5 {
 impl<'a, U> Sock5<U>
 where
     U: for<'b> Upstream<'b> + Stream,
-    <U as Upstream<'a>>::Output: Future<Output = io::Result<U>>,
+    <U as Upstream<'a>>::Output: Future<Output = IOResult<U>>,
 {
-    pub async fn process<S: Stream>(mut client: S) -> Result<()> {
+    pub async fn process<S: Stream>(mut client: S) -> IOResult<()> {
+        match Self::try_process(&mut client).await {
+            Err(err) => err.write(&mut client).await,
+            Ok(_) => Ok(()),
+        }
+    }
+
+    pub async fn try_process<S: Stream>(mut client: S) -> Result<()> {
         let mut stage = Continue(Ok(Self::Negotiation(Negotiation)));
         while let Continue(current) = stage {
             stage = current?.run(&mut client).await;

@@ -1,6 +1,6 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::constant::{OK, VER};
+use crate::constant::{NO_AUTH, VER};
 use crate::error::Error;
 use crate::extract::try_extract_version;
 use crate::marker::{Stream, UnpinAsyncRead};
@@ -12,7 +12,7 @@ pub struct Negotiation;
 impl Negotiation {
     pub async fn run<S: Stream>(self, mut client: S) -> Result<()> {
         let _nmethods = try_extract_methods(&mut client).await?;
-        client.write_all(&[VER, OK]).await?;
+        client.write_all(&[VER, NO_AUTH]).await?;
         Ok(())
     }
 }
@@ -53,7 +53,7 @@ mod tests {
         let result = negotiation.run(&mut server).await;
 
         assert!(result.is_ok());
-        assert_eq!(client.read_exact_bytes().await.unwrap(), [VER, OK]);
+        assert_eq!(client.read_exact_bytes().await.unwrap(), [VER, NO_AUTH]);
     }
 
     #[tokio::test]
