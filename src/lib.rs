@@ -10,7 +10,6 @@ mod negotiation;
 mod test;
 
 use std::{
-    io,
     ops::ControlFlow::{self, *},
     pin::Pin,
 };
@@ -98,7 +97,7 @@ trait Upstream<'a> {
 }
 
 impl<'a> Upstream<'a> for TcpStream {
-    type Output = BoxFuture<'a, io::Result<Self>>;
+    type Output = BoxFuture<'a, IOResult<Self>>;
 
     fn connect<S: ToSocketAddrs + Send + 'a>(addr: S) -> Self::Output {
         Box::pin(TcpStream::connect(addr))
