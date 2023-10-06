@@ -5,7 +5,7 @@ use crate::{
     constant::{OK, VER},
     error::Error,
     marker::{Stream, UnpinAsyncRead},
-    Result, Sock5,
+    read_vec_u8, Result, Sock5,
 };
 
 #[derive(Debug, PartialEq)]
@@ -40,16 +40,13 @@ extract!(version > VER => Error::BadVersion(version));
 
 async fn try_extract_credential<R: UnpinAsyncRead>(mut client: R) -> Result<(Vec<u8>, Vec<u8>)> {
     try_extract_version(&mut client).await?;
-    let mut buf = [0; 0xFF];
     let username = {
         let ulen = client.read_u8().await? as usize;
-        client.read_exact(&mut buf[..ulen]).await?;
-        buf[..ulen].to_vec()
+        read_vec_u8(&mut client, ulen).await?
     };
     let password = {
         let plen = client.read_u8().await? as usize;
-        client.read_exact(&mut buf[..plen]).await?;
-        buf[..plen].to_vec()
+        read_vec_u8(&mut client, plen).await?
     };
     Ok((username, password))
 }

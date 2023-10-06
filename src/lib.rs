@@ -20,9 +20,9 @@ use core::future::Future;
 use credential::Credential;
 use error::Error;
 use forward::Forward;
-use marker::Stream;
+use marker::{Stream, UnpinAsyncRead};
 use negotiation::Negotiation;
-use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::{net::{TcpListener, TcpStream, ToSocketAddrs}, io::AsyncReadExt};
 
 type Result<T> = std::result::Result<T, Error>;
 type IOResult<T> = std::io::Result<T>;
@@ -101,3 +101,15 @@ impl<'a> Upstream<'a> for TcpStream {
         Box::pin(TcpStream::connect(addr))
     }
 }
+
+async fn read_vec_u8<R: UnpinAsyncRead>(mut client: R, n: usize) -> IOResult<Vec<u8>> {
+    let mut buf = unsafe {
+        let mut buf = Vec::with_capacity(n);
+        #[allow(clippy::uninit_vec)]
+        buf.set_len(n);
+        buf
+    };
+    client.read_exact(&mut buf).await?;
+    Ok(buf)
+}
+

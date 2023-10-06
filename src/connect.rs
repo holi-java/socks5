@@ -30,10 +30,10 @@ impl Connect {
 
 extract!(connect_cmd != CONNECT => BadCommand(connect_cmd));
 
-async fn try_extract_addr<T: UnpinAsyncRead>(client: &mut T) -> Result<SocketAddr> {
-    _ = try_extract_version(&mut *client).await?;
-    _ = try_extract_connect_cmd(&mut *client).await?;
-    _ = try_extract_rsv(&mut *client).await?;
+async fn try_extract_addr<T: UnpinAsyncRead>(mut client: T) -> Result<SocketAddr> {
+    _ = try_extract_version(&mut client).await?;
+    _ = try_extract_connect_cmd(&mut client).await?;
+    _ = try_extract_rsv(&mut client).await?;
     let _atype = client.read_u8().await?;
     let ip = client.read_u32().await?;
     let port = client.read_u16().await?;

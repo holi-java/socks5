@@ -6,7 +6,7 @@ use crate::credential::Credential;
 use crate::error::Error;
 use crate::extract::try_extract_version;
 use crate::marker::{Stream, UnpinAsyncRead};
-use crate::{Result, Sock5};
+use crate::{read_vec_u8, Result, Sock5};
 
 pub const USERNAME: &str = include_str!("conf/username");
 pub const PASSWORD: &str = include_str!("conf/password");
@@ -36,17 +36,10 @@ impl Negotiation {
 
 extract!(nmethods == 0 => Error::NoAuthMethods);
 
-async fn try_extract_methods<T: UnpinAsyncRead>(client: &mut T) -> Result<Vec<u8>> {
-    _ = try_extract_version(&mut *client).await?;
-    let nmethods = try_extract_nmethods(&mut *client).await.map(usize::from)?;
-    let mut methods = unsafe {
-        let mut buf = Vec::with_capacity(nmethods);
-        #[allow(clippy::uninit_vec)]
-        buf.set_len(nmethods);
-        buf
-    };
-    client.read_exact(&mut methods).await?;
-    Ok(methods)
+async fn try_extract_methods<T: UnpinAsyncRead>(mut client: T) -> Result<Vec<u8>> {
+    _ = try_extract_version(&mut client).await?;
+    let nmethods = try_extract_nmethods(&mut client).await.map(usize::from)?;
+    Ok(read_vec_u8(client, nmethods).await?)
 }
 
 #[cfg(test)]
