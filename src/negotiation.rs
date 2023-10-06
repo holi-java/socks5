@@ -22,14 +22,17 @@ extract!(nmethods == 0 => Error::NoAuthMethods);
 async fn try_extract_methods<T: UnpinAsyncRead>(client: &mut T) -> Result<Vec<u8>> {
     _ = try_extract_version(&mut *client).await?;
     let nmethods = try_extract_nmethods(&mut *client).await.map(usize::from)?;
-    let mut buf = unsafe {
+    let mut methods = unsafe {
         let mut buf = Vec::with_capacity(nmethods);
         #[allow(clippy::uninit_vec)]
         buf.set_len(nmethods);
         buf
     };
-    client.read_exact(&mut buf).await?;
-    Ok(buf)
+    client.read_exact(&mut methods).await?;
+    if !methods.contains(&NO_AUTH) {
+        return Err(Error::UnacceptableMethods(methods));
+    }
+    Ok(methods)
 }
 
 #[cfg(test)]
@@ -71,10 +74,21 @@ mod tests {
     async fn fails_without_any_authentication_methods() {
         let (mut client, mut server) = duplex(100);
         let negotiation = Negotiation;
-        client.write_all(&[0x5, 0]).await.unwrap();
+        client.write_all(&[VER, 0]).await.unwrap();
 
         let err = negotiation.run(&mut server).await.unwrap_err();
 
         assert!(matches!(err, NoAuthMethods));
+    }
+
+    #[tokio::test]
+    async fn fails_with_unacceptable_methods() {
+        let (mut client, mut server) = duplex(100);
+        let negotiation = Negotiation;
+        client.write_all(&[VER, 1, 0x3]).await.unwrap();
+
+        let err = negotiation.run(&mut server).await.unwrap_err();
+
+        assert!(matches!(err, UnacceptableMethods(methods) if methods == [0x3]));
     }
 }

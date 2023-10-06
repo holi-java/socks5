@@ -9,9 +9,11 @@ use crate::{
 };
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     BadVersion(u8),
     NoAuthMethods,
+    UnacceptableMethods(Vec<u8>),
     BadCommand(u8),
     BadRSV(u8),
     IO(io::Error),
@@ -26,7 +28,7 @@ impl From<io::Error> for Error {
 impl Error {
     pub async fn write<W: UnpinAsyncWrite>(self, mut client: W) -> IOResult<()> {
         match self {
-            Error::BadVersion(_) | Error::NoAuthMethods => {
+            Error::BadVersion(_) | Error::NoAuthMethods | Error::UnacceptableMethods(_) => {
                 client.write_all(&[VER, NO_ACCEPTABLE_METHODS]).await
             }
             Error::BadRSV(_) | Error::BadCommand(_) => {
@@ -54,8 +56,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn no_auto_methods_error() {
+    async fn no_auth_methods_error() {
         let err = Error::NoAuthMethods;
+        let mut out = vec![];
+        err.write(&mut out).await.unwrap();
+
+        assert_eq!(out, [VER, NO_ACCEPTABLE_METHODS]);
+    }
+
+    #[tokio::test]
+    async fn unacceptable_methods_error() {
+        let err = Error::UnacceptableMethods(vec![0x3]);
         let mut out = vec![];
         err.write(&mut out).await.unwrap();
 
