@@ -1,6 +1,8 @@
 pub const VER: u8 = 0x5;
 pub const NO_AUTH: u8 = 0x0;
+pub const CREDENTIAL_AUTH: u8 = 0x02;
 pub const OK: u8 = 0x0;
+pub const AUTH_ERROR: u8 = 0x1;
 pub const CONNECT: u8 = 0x1;
 pub const RSV: u8 = 0x0;
 pub const IPV4: u8 = 0x1;

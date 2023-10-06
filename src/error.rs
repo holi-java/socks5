@@ -3,7 +3,7 @@ use std::io;
 use tokio::io::AsyncWriteExt;
 
 use crate::{
-    constant::{CONNECT_DENIED, NO_ACCEPTABLE_METHODS, VER},
+    constant::{AUTH_ERROR, CONNECT_DENIED, NO_ACCEPTABLE_METHODS, VER},
     marker::UnpinAsyncWrite,
     IOResult,
 };
@@ -14,6 +14,7 @@ pub enum Error {
     BadVersion(u8),
     NoAuthMethods,
     UnacceptableMethods(Vec<u8>),
+    BadCredential,
     BadCommand(u8),
     BadRSV(u8),
     IO(io::Error),
@@ -31,6 +32,7 @@ impl Error {
             Error::BadVersion(_) | Error::NoAuthMethods | Error::UnacceptableMethods(_) => {
                 client.write_all(&[VER, NO_ACCEPTABLE_METHODS]).await
             }
+            Error::BadCredential => client.write_all(&[VER, AUTH_ERROR]).await,
             Error::BadRSV(_) | Error::BadCommand(_) => {
                 client.write_all(&[VER, CONNECT_DENIED]).await
             }
@@ -42,7 +44,7 @@ impl Error {
 #[cfg(test)]
 mod tests {
     use crate::{
-        constant::{CONNECT_DENIED, NO_ACCEPTABLE_METHODS, VER},
+        constant::{AUTH_ERROR, CONNECT_DENIED, NO_ACCEPTABLE_METHODS, VER},
         error::Error,
     };
 
@@ -71,6 +73,15 @@ mod tests {
         err.write(&mut out).await.unwrap();
 
         assert_eq!(out, [VER, NO_ACCEPTABLE_METHODS]);
+    }
+
+    #[tokio::test]
+    async fn bad_credential_error() {
+        let err = Error::BadCredential;
+        let mut out = vec![];
+        err.write(&mut out).await.unwrap();
+
+        assert_eq!(out, [VER, AUTH_ERROR]);
     }
 
     #[tokio::test]

@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{future::Future, net::SocketAddr};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -6,19 +6,25 @@ use crate::{
     constant::{CONNECT, IPV4, OK, RSV, UNSPECIFIED_SOCKET_ADDR, VER},
     error::Error::*,
     extract::{try_extract_rsv, try_extract_version},
+    forward::Forward,
     marker::{Stream, UnpinAsyncRead},
-    Result,
+    IOResult, Result, Sock5, Upstream,
 };
 
 #[derive(Debug)]
 pub struct Connect;
 
 impl Connect {
-    pub async fn run<S: Stream>(self, mut client: S) -> Result<SocketAddr> {
+    pub async fn run<'a, S: Stream, U>(self, mut client: S) -> Result<Sock5<U>>
+    where
+        U: Upstream<'a>,
+        U::Output: Future<Output = IOResult<U>>,
+    {
         let addr = try_extract_addr(&mut client).await?;
         client.write_all(&[VER, OK, RSV, IPV4]).await?;
         client.write_all(&UNSPECIFIED_SOCKET_ADDR).await?;
-        Ok(addr)
+        let upstream = U::connect(addr).await?;
+        Ok(Sock5::Forward(Forward(upstream)))
     }
 }
 
@@ -36,15 +42,18 @@ async fn try_extract_addr<T: UnpinAsyncRead>(client: &mut T) -> Result<SocketAdd
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
 
-    use tokio::io::{duplex, AsyncWriteExt};
+    use tokio::{
+        io::{duplex, AsyncWriteExt},
+        net::TcpStream,
+    };
 
     use crate::{
         connect::Connect,
         constant::{CONNECT, IPV4, OK, RSV, UNSPECIFIED_SOCKET_ADDR, VER},
         error::Error::*,
         test::AsyncExactRead,
+        Sock5,
     };
 
     #[tokio::test]
@@ -52,12 +61,13 @@ mod tests {
         let (mut client, mut server) = duplex(usize::MAX);
         let connect = Connect;
         client
-            .write_all(&[VER, CONNECT, RSV, IPV4, 1, 2, 3, 4, 5, 6])
+            .write_all(&[VER, CONNECT, RSV, IPV4, 14, 119, 104, 254, 0, 80])
             .await
             .unwrap();
 
-        let addr: SocketAddr = connect.run(&mut server).await.unwrap();
-        assert_eq!(addr, "1.2.3.4:1286".parse().unwrap());
+        let forward = connect.run::<_, TcpStream>(&mut server).await.unwrap();
+        assert!(matches!(forward,
+                Sock5::Forward(forward) if forward.0.peer_addr().unwrap() == "14.119.104.254:80".parse().unwrap()));
 
         let response = client.read_exact_bytes::<10>().await.unwrap();
         assert_eq!(response[..4], [VER, OK, RSV, IPV4]);
@@ -73,7 +83,7 @@ mod tests {
             .await
             .unwrap();
 
-        let err = connect.run(&mut server).await.unwrap_err();
+        let err = connect.run::<_, TcpStream>(&mut server).await.unwrap_err();
         assert!(matches!(err, BadVersion(0x6)));
     }
 
@@ -86,7 +96,7 @@ mod tests {
             .await
             .unwrap();
 
-        let err = connect.run(&mut server).await.unwrap_err();
+        let err = connect.run::<_, TcpStream>(&mut server).await.unwrap_err();
         assert!(matches!(err, BadCommand(0x6)));
     }
 
@@ -99,7 +109,7 @@ mod tests {
             .await
             .unwrap();
 
-        let err = connect.run(&mut server).await.unwrap_err();
+        let err = connect.run::<_, TcpStream>(&mut server).await.unwrap_err();
         assert!(matches!(err, BadRSV(0x1)));
     }
 }

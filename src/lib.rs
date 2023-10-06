@@ -2,6 +2,7 @@
 mod extract;
 mod connect;
 mod constant;
+mod credential;
 mod error;
 mod forward;
 mod marker;
@@ -16,6 +17,7 @@ use std::{
 
 use connect::Connect;
 use core::future::Future;
+use credential::Credential;
 use error::Error;
 use forward::Forward;
 use marker::Stream;
@@ -33,8 +35,10 @@ pub async fn start(port: u16) -> Result<()> {
     }
 }
 
+#[derive(Debug)]
 enum Sock5<U = TcpStream> {
     Negotiation(Negotiation),
+    Authentication(Credential),
     Connect(Connect),
     Forward(Forward<U>),
 }
@@ -76,15 +80,9 @@ where
         }
 
         match self {
-            Sock5::Negotiation(stage) => {
-                try_await!(stage.run(client));
-                Continue(Ok(Self::Connect(Connect)))
-            }
-            Sock5::Connect(stage) => {
-                let addr = try_await!(stage.run(client));
-                let upstream = try_await!(U::connect(addr));
-                Continue(Ok(Self::Forward(Forward(upstream))))
-            }
+            Sock5::Negotiation(stage) => Continue(stage.run(client).await),
+            Sock5::Authentication(credential) => Continue(credential.run(client).await),
+            Sock5::Connect(stage) => Continue(stage.run(client).await),
             Sock5::Forward(stage) => Break(try_await!(stage.run(client))),
         }
     }

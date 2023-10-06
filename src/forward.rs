@@ -3,6 +3,7 @@ use tokio::io::copy_bidirectional;
 use crate::marker::Stream;
 use crate::Result;
 
+#[derive(Debug)]
 pub struct Forward<U>(pub U);
 
 impl<U: Stream> Forward<U> {
