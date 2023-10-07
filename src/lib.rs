@@ -22,16 +22,74 @@ use error::Error;
 use forward::Forward;
 use marker::{Stream, UnpinAsyncRead};
 use negotiation::Negotiation;
-use tokio::{net::{TcpListener, TcpStream, ToSocketAddrs}, io::AsyncReadExt};
+use tokio::{
+    io::AsyncReadExt,
+    net::{TcpListener, TcpStream, ToSocketAddrs},
+};
 
 type Result<T> = std::result::Result<T, Error>;
 type IOResult<T> = std::io::Result<T>;
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-pub async fn start(port: u16) -> Result<()> {
+pub async fn start(port: u16) -> IOResult<()> {
     let server = TcpListener::bind(format!("127.0.0.1:{port}")).await?;
     loop {
-        tokio::spawn(Stage::starts(server.accept().await?.0));
+        tokio::spawn(Socks5::<TcpStream>::new().start(server.accept().await?.0));
+    }
+}
+
+pub struct Socks5<U> {
+    stage: Stage<U>,
+}
+
+impl<U> Socks5<U> {
+    pub fn new() -> Self {
+        Socks5 {
+            stage: Stage::Negotiation(Negotiation),
+        }
+    }
+}
+
+impl<'a, U> Socks5<U>
+where
+    U: for<'b> Upstream<'b> + Stream,
+    <U as Upstream<'a>>::Output: Future<Output = IOResult<U>>,
+{
+    pub async fn start<S: Stream>(mut self, client: S) -> IOResult<()> {
+        self.process(client).await
+    }
+
+    pub async fn process<S: Stream>(&mut self, mut client: S) -> IOResult<()> {
+        match self.try_process(&mut client).await {
+            Err(err) => err.write(&mut client).await,
+            Ok(_) => Ok(()),
+        }
+    }
+
+    pub async fn try_process<S: Stream>(&mut self, mut client: S) -> Result<()> {
+        while let Continue(result) = self.run(&mut client).await {
+            result?;
+        }
+        Ok(())
+    }
+
+    async fn run<S: Stream>(&mut self, client: S) -> ControlFlow<(), Result<()>> {
+        macro_rules! try_await {
+            ($future: expr) => {
+                match $future.await {
+                    Ok(value) => value,
+                    Err(err) => return Continue(Err(Error::from(err))),
+                }
+            };
+        }
+
+        self.stage = match &mut self.stage {
+            Stage::Negotiation(stage) => try_await!(stage.run(client)),
+            Stage::Authentication(stage) => try_await!(stage.run(client)),
+            Stage::Connect(stage) => try_await!(stage.run(client)),
+            Stage::Forward(stage) => return Break(try_await!(stage.run(client))),
+        };
+        Continue(Ok(()))
     }
 }
 
@@ -43,52 +101,7 @@ enum Stage<U = TcpStream> {
     Forward(Forward<U>),
 }
 
-impl Stage {
-    pub async fn starts<S: Stream>(client: S) -> IOResult<()> {
-        Self::process(client).await
-    }
-}
-
-impl<'a, U> Stage<U>
-where
-    U: for<'b> Upstream<'b> + Stream,
-    <U as Upstream<'a>>::Output: Future<Output = IOResult<U>>,
-{
-    pub async fn process<S: Stream>(mut client: S) -> IOResult<()> {
-        match Self::try_process(&mut client).await {
-            Err(err) => err.write(&mut client).await,
-            Ok(_) => Ok(()),
-        }
-    }
-
-    pub async fn try_process<S: Stream>(mut client: S) -> Result<()> {
-        let mut stage = Continue(Ok(Self::Negotiation(Negotiation)));
-        while let Continue(current) = stage {
-            stage = current?.run(&mut client).await;
-        }
-        Ok(())
-    }
-
-    async fn run<S: Stream>(self, client: S) -> ControlFlow<(), Result<Self>> {
-        macro_rules! try_await {
-            ($future: expr) => {
-                match $future.await {
-                    Ok(value) => value,
-                    Err(err) => return Continue(Err(Error::from(err))),
-                }
-            };
-        }
-
-        match self {
-            Stage::Negotiation(stage) => Continue(stage.run(client).await),
-            Stage::Authentication(credential) => Continue(credential.run(client).await),
-            Stage::Connect(stage) => Continue(stage.run(client).await),
-            Stage::Forward(stage) => Break(try_await!(stage.run(client))),
-        }
-    }
-}
-
-trait Upstream<'a> {
+pub trait Upstream<'a> {
     type Output;
 
     fn connect<S: ToSocketAddrs + Send + 'a>(addr: S) -> Self::Output;
@@ -112,4 +125,3 @@ async fn read_vec_u8<R: UnpinAsyncRead>(mut client: R, n: usize) -> IOResult<Vec
     client.read_exact(&mut buf).await?;
     Ok(buf)
 }
-

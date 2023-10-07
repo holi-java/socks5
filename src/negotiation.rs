@@ -15,7 +15,7 @@ pub const PASSWORD: &str = include_str!("conf/password");
 pub struct Negotiation;
 
 impl Negotiation {
-    pub async fn run<S: Stream, U>(self, mut client: S) -> Result<Stage<U>> {
+    pub async fn run<S: Stream, U>(&mut self, mut client: S) -> Result<Stage<U>> {
         let methods = try_extract_methods(&mut client).await?;
 
         if methods.contains(&CREDENTIAL_AUTH) {
@@ -58,7 +58,7 @@ mod tests {
     #[tokio::test]
     async fn no_auth_negotiation() {
         let (mut client, mut server) = duplex(100);
-        let negotiation = Negotiation;
+        let mut negotiation = Negotiation;
         client.write_all(&[VER, 1, NO_AUTH]).await.unwrap();
 
         let result = negotiation.run::<_, TcpStream>(&mut server).await;
@@ -70,7 +70,7 @@ mod tests {
     #[tokio::test]
     async fn credential_auth_negotiation() {
         let (mut client, mut server) = duplex(100);
-        let negotiation = Negotiation;
+        let mut negotiation = Negotiation;
         client.write_all(&[VER, 1, CREDENTIAL_AUTH]).await.unwrap();
 
         let result = negotiation.run::<_, TcpStream>(&mut server).await;
@@ -87,7 +87,7 @@ mod tests {
     #[tokio::test]
     async fn fails_with_err_version() {
         let (mut client, mut server) = duplex(100);
-        let negotiation = Negotiation;
+        let mut negotiation = Negotiation;
         client.write_all(&[0x6, 1, NO_AUTH]).await.unwrap();
 
         let err = negotiation
@@ -101,7 +101,7 @@ mod tests {
     #[tokio::test]
     async fn fails_without_any_authentication_methods() {
         let (mut client, mut server) = duplex(100);
-        let negotiation = Negotiation;
+        let mut negotiation = Negotiation;
         client.write_all(&[VER, 0]).await.unwrap();
 
         let err = negotiation
@@ -115,7 +115,7 @@ mod tests {
     #[tokio::test]
     async fn fails_with_unacceptable_methods() {
         let (mut client, mut server) = duplex(100);
-        let negotiation = Negotiation;
+        let mut negotiation = Negotiation;
         client.write_all(&[VER, 1, 0x3]).await.unwrap();
 
         let err = negotiation

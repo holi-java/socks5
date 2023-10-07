@@ -7,7 +7,7 @@ use crate::Result;
 pub struct Forward<U>(pub U);
 
 impl<U: Stream> Forward<U> {
-    pub async fn run<S: Stream>(mut self, mut client: S) -> Result<()> {
+    pub async fn run<S: Stream>(&mut self, mut client: S) -> Result<()> {
         copy_bidirectional(&mut client, &mut self.0).await?;
         Ok(())
     }
@@ -25,8 +25,10 @@ mod tests {
     async fn copy_bidirectional() {
         let (mut a, a2) = duplex(usize::MAX);
         let (mut b, b2) = duplex(usize::MAX);
-        let forward = Forward(a2);
-        tokio::spawn(forward.run(b2));
+        tokio::spawn(async move {
+            let mut forward = Forward(a2);
+            forward.run(b2).await
+        });
 
         a.write_all(&[1, 2]).await.unwrap();
         b.write_all(&[3, 4]).await.unwrap();

@@ -24,7 +24,7 @@ lazy_static::lazy_static! {
 pub struct Connect;
 
 impl Connect {
-    pub async fn run<'a, S: Stream, U>(self, mut client: S) -> Result<Stage<U>>
+    pub async fn run<'a, S: Stream, U>(&mut self, mut client: S) -> Result<Stage<U>>
     where
         U: Upstream<'a>,
         U::Output: Future<Output = IOResult<U>>,
@@ -94,7 +94,7 @@ mod tests {
     #[tokio::test]
     async fn connect() {
         let (mut client, mut server) = duplex(usize::MAX);
-        let connect = Connect;
+        let mut connect = Connect;
         client
             .write_all(&[VER, CONNECT, RSV, IPV4, 14, 119, 104, 254, 0, 80])
             .await
@@ -112,7 +112,7 @@ mod tests {
     #[tokio::test]
     async fn fails_with_bad_version() {
         let (mut client, mut server) = duplex(usize::MAX);
-        let connect = Connect;
+        let mut connect = Connect;
         client
             .write_all(&[0x6, CONNECT, RSV, IPV4, 1, 2, 3, 4, 5, 6])
             .await
@@ -125,7 +125,7 @@ mod tests {
     #[tokio::test]
     async fn fails_with_bad_cmd() {
         let (mut client, mut server) = duplex(usize::MAX);
-        let connect = Connect;
+        let mut connect = Connect;
         client
             .write_all(&[VER, 0x6, RSV, IPV4, 1, 2, 3, 4, 5, 6])
             .await
@@ -138,7 +138,7 @@ mod tests {
     #[tokio::test]
     async fn fails_with_bad_rsv() {
         let (mut client, mut server) = duplex(usize::MAX);
-        let connect = Connect;
+        let mut connect = Connect;
         client
             .write_all(&[VER, CONNECT, 0x1, IPV4, 1, 2, 3, 4, 5, 6])
             .await

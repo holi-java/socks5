@@ -26,7 +26,7 @@ impl Credential {
         }
     }
 
-    pub async fn run<S: Stream, U>(self, mut client: S) -> Result<Stage<U>> {
+    pub async fn run<S: Stream, U>(&mut self, mut client: S) -> Result<Stage<U>> {
         let (username, password) = try_extract_credential(&mut client).await?;
         if self.username.as_bytes() != username || self.password.as_bytes() != password {
             return Err(Error::BadCredential);
@@ -68,7 +68,7 @@ mod tests {
 
     #[tokio::test]
     async fn authenticate_with_valid_credential() {
-        let it = Credential::new("root", "pass");
+        let mut it = Credential::new("root", "pass");
         let (mut a, b) = duplex(usize::MAX);
 
         a.write_all(&[VER]).await.unwrap();
@@ -84,7 +84,7 @@ mod tests {
 
     #[tokio::test]
     async fn authenticate_with_lower_version_is_ok() {
-        let it = Credential::new("root", "pass");
+        let mut it = Credential::new("root", "pass");
         let (mut a, b) = duplex(usize::MAX);
 
         a.write_all(&[0x1]).await.unwrap();
@@ -100,7 +100,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_bad_version() {
-        let it = Credential::new("root", "pass");
+        let mut it = Credential::new("root", "pass");
         let (mut a, b) = duplex(usize::MAX);
 
         a.write_all(&[0x06]).await.unwrap();
@@ -111,7 +111,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_bad_credential() {
-        let it = Credential::new("root", "pass");
+        let mut it = Credential::new("root", "pass");
         let (mut a, b) = duplex(usize::MAX);
 
         a.write_all(&[VER]).await.unwrap();
