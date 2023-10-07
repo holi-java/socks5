@@ -6,7 +6,7 @@ use crate::credential::Credential;
 use crate::error::Error;
 use crate::extract::try_extract_version;
 use crate::marker::{Stream, UnpinAsyncRead};
-use crate::{read_vec_u8, Result, Sock5};
+use crate::{read_vec_u8, Result, Socks5};
 
 pub const USERNAME: &str = include_str!("conf/username");
 pub const PASSWORD: &str = include_str!("conf/password");
@@ -15,12 +15,12 @@ pub const PASSWORD: &str = include_str!("conf/password");
 pub struct Negotiation;
 
 impl Negotiation {
-    pub async fn run<S: Stream, U>(self, mut client: S) -> Result<Sock5<U>> {
+    pub async fn run<S: Stream, U>(self, mut client: S) -> Result<Socks5<U>> {
         let methods = try_extract_methods(&mut client).await?;
 
         if methods.contains(&CREDENTIAL_AUTH) {
             client.write_all(&[VER, CREDENTIAL_AUTH]).await?;
-            return Ok(Sock5::Authentication(Credential::new(
+            return Ok(Socks5::Authentication(Credential::new(
                 USERNAME.trim(),
                 PASSWORD.trim(),
             )));
@@ -30,7 +30,7 @@ impl Negotiation {
             return Err(Error::UnacceptableMethods(methods));
         }
         client.write_all(&[VER, NO_AUTH]).await?;
-        Ok(Sock5::Connect(Connect))
+        Ok(Socks5::Connect(Connect))
     }
 }
 
@@ -63,7 +63,7 @@ mod tests {
 
         let result = negotiation.run::<_, TcpStream>(&mut server).await;
 
-        assert!(matches!(result, Ok(Sock5::Connect(_))));
+        assert!(matches!(result, Ok(Socks5::Connect(_))));
         assert_eq!(client.read_exact_bytes().await.unwrap(), [VER, NO_AUTH]);
     }
 
@@ -76,7 +76,7 @@ mod tests {
         let result = negotiation.run::<_, TcpStream>(&mut server).await;
 
         assert!(
-            matches!(result, Ok(Sock5::Authentication(credential)) if credential == Credential::new("socks5", "password"))
+            matches!(result, Ok(Socks5::Authentication(credential)) if credential == Credential::new("socks5", "password"))
         );
         assert_eq!(
             client.read_exact_bytes().await.unwrap(),
