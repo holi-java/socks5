@@ -68,7 +68,7 @@ async fn try_extract_addr<T: UnpinAsyncRead>(mut client: T) -> Result<SocketAddr
                 .ok_or_else(|| ResolveError::from("No record found"))?;
             Ok(SocketAddr::from((record.0, port)))
         }
-        _ => todo!(),
+        _ => Err(Error::InvalidAtype(atype)),
     }
 }
 
@@ -178,5 +178,13 @@ mod tests {
             .map(|it| SocketAddr::from((it.0, 80)))
             .collect::<Vec<_>>();
         assert!(available.contains(&addr));
+    }
+
+    #[tokio::test]
+    async fn fails_with_invalid_atype() {
+        let buf = Cursor::new([VER, CONNECT, RSV, 0x2]);
+        let err = super::try_extract_addr(buf).await;
+
+        assert!(matches!(err, Err(InvalidAtype(0x2))));
     }
 }

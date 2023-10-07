@@ -10,4 +10,6 @@ pub const DOMAIN_NAME: u8 = 0x3;
 pub const IPV6: u8 = 0x4;
 pub const UNSPECIFIED_SOCKET_ADDR: [u8; 6] = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0];
 pub const NO_ACCEPTABLE_METHODS: u8 = 0xFF;
-pub const CONNECT_DENIED: u8 = 0x02;
+pub const UNSUPPORTED_COMMAND: u8 = 0x7;
+pub const CONNECTION_REFUSED: u8 = 0x02;
+pub const TARGET_SERVER_UNREACHABLE: u8 = 0x04;

@@ -4,7 +4,10 @@ use tokio::io::AsyncWriteExt;
 use trust_dns_resolver::error::ResolveError;
 
 use crate::{
-    constant::{AUTH_ERROR, CONNECT_DENIED, NO_ACCEPTABLE_METHODS, VER},
+    constant::{
+        AUTH_ERROR, CONNECTION_REFUSED, NO_ACCEPTABLE_METHODS, TARGET_SERVER_UNREACHABLE,
+        UNSUPPORTED_COMMAND, VER,
+    },
     marker::UnpinAsyncWrite,
     IOResult,
 };
@@ -18,6 +21,7 @@ pub enum Error {
     BadCredential,
     BadCommand(u8),
     BadRSV(u8),
+    InvalidAtype(u8),
     InvalidDomainName(Utf8Error),
     ResolveDomainError(ResolveError),
     IO(io::Error),
@@ -42,10 +46,13 @@ impl Error {
                 client.write_all(&[VER, NO_ACCEPTABLE_METHODS]).await
             }
             Error::BadCredential => client.write_all(&[VER, AUTH_ERROR]).await,
-            Error::BadRSV(_)
-            | Error::BadCommand(_)
-            | Error::InvalidDomainName(_)
-            | Error::ResolveDomainError(_) => client.write_all(&[VER, CONNECT_DENIED]).await,
+            Error::BadRSV(_) | Error::InvalidAtype(_) | Error::InvalidDomainName(_) => {
+                client.write_all(&[VER, CONNECTION_REFUSED]).await
+            }
+            Error::BadCommand(_) => client.write_all(&[VER, UNSUPPORTED_COMMAND]).await,
+            Error::ResolveDomainError(_) => {
+                client.write_all(&[VER, TARGET_SERVER_UNREACHABLE]).await
+            }
             Error::IO(err) => Err(err),
         }
     }
@@ -57,7 +64,10 @@ mod tests {
     use trust_dns_resolver::error::ResolveErrorKind;
 
     use crate::{
-        constant::{AUTH_ERROR, CONNECT_DENIED, NO_ACCEPTABLE_METHODS, VER},
+        constant::{
+            AUTH_ERROR, CONNECTION_REFUSED, NO_ACCEPTABLE_METHODS, TARGET_SERVER_UNREACHABLE,
+            UNSUPPORTED_COMMAND, VER,
+        },
         error::Error,
     };
 
@@ -103,7 +113,7 @@ mod tests {
         let mut out = vec![];
         err.write(&mut out).await.unwrap();
 
-        assert_eq!(out, [VER, CONNECT_DENIED]);
+        assert_eq!(out, [VER, UNSUPPORTED_COMMAND]);
     }
 
     #[tokio::test]
@@ -112,7 +122,7 @@ mod tests {
         let mut out = vec![];
         err.write(&mut out).await.unwrap();
 
-        assert_eq!(out, [VER, CONNECT_DENIED]);
+        assert_eq!(out, [VER, CONNECTION_REFUSED]);
     }
 
     #[tokio::test]
@@ -122,7 +132,7 @@ mod tests {
         let mut out = vec![];
         err.write(&mut out).await.unwrap();
 
-        assert_eq!(out, [VER, CONNECT_DENIED]);
+        assert_eq!(out, [VER, CONNECTION_REFUSED]);
     }
 
     #[tokio::test]
@@ -131,6 +141,15 @@ mod tests {
         let mut out = vec![];
         err.write(&mut out).await.unwrap();
 
-        assert_eq!(out, [VER, CONNECT_DENIED]);
+        assert_eq!(out, [VER, TARGET_SERVER_UNREACHABLE]);
+    }
+
+    #[tokio::test]
+    async fn invalid_atype_error() {
+        let err = Error::InvalidAtype(0x2);
+        let mut out = vec![];
+        err.write(&mut out).await.unwrap();
+
+        assert_eq!(out, [VER, CONNECTION_REFUSED]);
     }
 }
