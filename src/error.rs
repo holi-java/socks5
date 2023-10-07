@@ -1,6 +1,7 @@
-use std::io;
+use std::{io, str::Utf8Error};
 
 use tokio::io::AsyncWriteExt;
+use trust_dns_resolver::error::ResolveError;
 
 use crate::{
     constant::{AUTH_ERROR, CONNECT_DENIED, NO_ACCEPTABLE_METHODS, VER},
@@ -17,12 +18,20 @@ pub enum Error {
     BadCredential,
     BadCommand(u8),
     BadRSV(u8),
+    InvalidDomainName(Utf8Error),
+    ResolveDomainError(ResolveError),
     IO(io::Error),
 }
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
         Self::IO(err)
+    }
+}
+
+impl From<ResolveError> for Error {
+    fn from(err: ResolveError) -> Self {
+        Self::ResolveDomainError(err)
     }
 }
 
@@ -33,9 +42,10 @@ impl Error {
                 client.write_all(&[VER, NO_ACCEPTABLE_METHODS]).await
             }
             Error::BadCredential => client.write_all(&[VER, AUTH_ERROR]).await,
-            Error::BadRSV(_) | Error::BadCommand(_) => {
-                client.write_all(&[VER, CONNECT_DENIED]).await
-            }
+            Error::BadRSV(_)
+            | Error::BadCommand(_)
+            | Error::InvalidDomainName(_)
+            | Error::ResolveDomainError(_) => client.write_all(&[VER, CONNECT_DENIED]).await,
             Error::IO(err) => Err(err),
         }
     }
@@ -43,6 +53,9 @@ impl Error {
 
 #[cfg(test)]
 mod tests {
+
+    use trust_dns_resolver::error::ResolveErrorKind;
+
     use crate::{
         constant::{AUTH_ERROR, CONNECT_DENIED, NO_ACCEPTABLE_METHODS, VER},
         error::Error,
@@ -96,6 +109,25 @@ mod tests {
     #[tokio::test]
     async fn bad_rsv() {
         let err = Error::BadRSV(0x2);
+        let mut out = vec![];
+        err.write(&mut out).await.unwrap();
+
+        assert_eq!(out, [VER, CONNECT_DENIED]);
+    }
+
+    #[tokio::test]
+    async fn invalid_domain_name() {
+        #[allow(invalid_from_utf8)]
+        let err = Error::InvalidDomainName(std::str::from_utf8(&[0, 159]).unwrap_err());
+        let mut out = vec![];
+        err.write(&mut out).await.unwrap();
+
+        assert_eq!(out, [VER, CONNECT_DENIED]);
+    }
+
+    #[tokio::test]
+    async fn resolve_domain_error() {
+        let err = Error::ResolveDomainError(ResolveErrorKind::Timeout.into());
         let mut out = vec![];
         err.write(&mut out).await.unwrap();
 
