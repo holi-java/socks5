@@ -3,6 +3,7 @@ use std::{
     net::{SocketAddr, ToSocketAddrs},
 };
 
+use socks5::Credential;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -17,7 +18,7 @@ include!("../src/constant.rs");
 #[tokio::test]
 async fn no_auth() {
     let port = 1081;
-    tokio::spawn(socks5::start(port));
+    tokio::spawn(socks5::run(port, None));
     _ = tokio::spawn(async {}).await;
     let mut client = TcpStream::connect(format!("127.0.0.1:{port}"))
         .await
@@ -53,7 +54,7 @@ async fn no_auth() {
 #[tokio::test]
 async fn shutdown_bad_request() {
     let port = 1082;
-    tokio::spawn(socks5::start(port));
+    tokio::spawn(socks5::run(port, None));
     _ = tokio::spawn(async {}).await;
     let mut client = TcpStream::connect(format!("127.0.0.1:{port}"))
         .await
@@ -73,7 +74,7 @@ async fn shutdown_bad_request() {
 #[tokio::test]
 async fn user_credential_authentication() {
     let port = 1083;
-    tokio::spawn(socks5::start(port));
+    tokio::spawn(socks5::run(port, Some(Credential::new("root", "pass"))));
     _ = tokio::spawn(async {}).await;
     let mut client = TcpStream::connect(format!("127.0.0.1:{port}"))
         .await
@@ -91,10 +92,10 @@ async fn user_credential_authentication() {
 
     // Authentication
     client.write_all(&[VER]).await.unwrap();
-    client.write_all(&[6]).await.unwrap();
-    client.write_all(b"socks5").await.unwrap();
-    client.write_all(&[8]).await.unwrap();
-    client.write_all(b"password").await.unwrap();
+    client.write_all(&[4]).await.unwrap();
+    client.write_all(b"root").await.unwrap();
+    client.write_all(&[4]).await.unwrap();
+    client.write_all(b"pass").await.unwrap();
     assert_eq!(client.read_exact_bytes().await.unwrap(), [VER, OK]);
 
     // Connect
@@ -123,7 +124,7 @@ async fn user_credential_authentication() {
 #[tokio::test]
 async fn fails_with_bad_credential() {
     let port = 1084;
-    tokio::spawn(socks5::start(port));
+    tokio::spawn(socks5::run(port, Some(Credential::new("root", "pass"))));
     _ = tokio::spawn(async {}).await;
     let mut client = TcpStream::connect(format!("127.0.0.1:{port}"))
         .await
@@ -141,8 +142,8 @@ async fn fails_with_bad_credential() {
 
     // Authentication
     client.write_all(&[VER]).await.unwrap();
-    client.write_all(&[6]).await.unwrap();
-    client.write_all(b"socks5").await.unwrap();
+    client.write_all(&[4]).await.unwrap();
+    client.write_all(b"root").await.unwrap();
     client.write_all(&[3]).await.unwrap();
     client.write_all(b"bad").await.unwrap();
     assert_eq!(client.read_exact_bytes().await.unwrap(), [VER, AUTH_ERROR]);

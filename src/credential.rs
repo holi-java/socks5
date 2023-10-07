@@ -8,7 +8,7 @@ use crate::{
     read_vec_u8, Result, Stage,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Credential {
     username: String,
     password: String,
@@ -26,7 +26,7 @@ impl Credential {
         }
     }
 
-    pub async fn run<S: Stream, U>(&mut self, mut client: S) -> Result<Stage<U>> {
+    pub(crate) async fn run<S: Stream, U>(&mut self, mut client: S) -> Result<Stage<U>> {
         let (username, password) = try_extract_credential(&mut client).await?;
         if self.username.as_bytes() != username || self.password.as_bytes() != password {
             return Err(Error::BadCredential);

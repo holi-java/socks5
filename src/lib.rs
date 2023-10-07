@@ -17,10 +17,11 @@ use std::{
 
 use connect::Connect;
 use core::future::Future;
-use credential::Credential;
+pub use credential::Credential;
 use error::Error;
 use forward::Forward;
-use marker::{Stream, UnpinAsyncRead};
+pub use marker::Stream;
+use marker::UnpinAsyncRead;
 use negotiation::Negotiation;
 use tokio::{
     io::AsyncReadExt,
@@ -31,10 +32,10 @@ type Result<T> = std::result::Result<T, Error>;
 type IOResult<T> = std::io::Result<T>;
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-pub async fn start(port: u16) -> IOResult<()> {
+pub async fn run(port: u16, credential: Option<Credential>) -> IOResult<()> {
     let server = TcpListener::bind(format!("127.0.0.1:{port}")).await?;
     loop {
-        tokio::spawn(Socks5::<TcpStream>::new().start(server.accept().await?.0));
+        tokio::spawn(Socks5::<TcpStream>::new(credential.clone()).start(server.accept().await?.0));
     }
 }
 
@@ -43,9 +44,9 @@ pub struct Socks5<U> {
 }
 
 impl<U> Socks5<U> {
-    pub fn new() -> Self {
+    pub fn new(credential: Option<Credential>) -> Self {
         Socks5 {
-            stage: Stage::Negotiation(Negotiation),
+            stage: Stage::Negotiation(Negotiation(credential)),
         }
     }
 }
@@ -55,18 +56,14 @@ where
     U: for<'b> Upstream<'b> + Stream,
     <U as Upstream<'a>>::Output: Future<Output = IOResult<U>>,
 {
-    pub async fn start<S: Stream>(mut self, client: S) -> IOResult<()> {
-        self.process(client).await
-    }
-
-    pub async fn process<S: Stream>(&mut self, mut client: S) -> IOResult<()> {
+    pub async fn start<S: Stream>(mut self, mut client: S) -> IOResult<()> {
         match self.try_process(&mut client).await {
             Err(err) => err.write(&mut client).await,
             Ok(_) => Ok(()),
         }
     }
 
-    pub async fn try_process<S: Stream>(&mut self, mut client: S) -> Result<()> {
+    pub(crate) async fn try_process<S: Stream>(&mut self, mut client: S) -> Result<()> {
         while let Continue(result) = self.run(&mut client).await {
             result?;
         }
