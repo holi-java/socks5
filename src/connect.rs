@@ -13,7 +13,7 @@ use crate::{
     extract::{try_extract_rsv, try_extract_version},
     forward::Forward,
     marker::{Stream, UnpinAsyncRead},
-    read_vec_u8, IOResult, Result, Socks5, Upstream,
+    read_vec_u8, IOResult, Result, Stage, Upstream,
 };
 
 lazy_static::lazy_static! {
@@ -24,7 +24,7 @@ lazy_static::lazy_static! {
 pub struct Connect;
 
 impl Connect {
-    pub async fn run<'a, S: Stream, U>(self, mut client: S) -> Result<Socks5<U>>
+    pub async fn run<'a, S: Stream, U>(self, mut client: S) -> Result<Stage<U>>
     where
         U: Upstream<'a>,
         U::Output: Future<Output = IOResult<U>>,
@@ -33,7 +33,7 @@ impl Connect {
         client.write_all(&[VER, OK, RSV, IPV4]).await?;
         client.write_all(&UNSPECIFIED_SOCKET_ADDR).await?;
         let upstream = U::connect(addr).await?;
-        Ok(Socks5::Forward(Forward(upstream)))
+        Ok(Stage::Forward(Forward(upstream)))
     }
 }
 
@@ -88,7 +88,7 @@ mod tests {
         constant::{CONNECT, DOMAIN_NAME, IPV4, IPV6, OK, RSV, UNSPECIFIED_SOCKET_ADDR, VER},
         error::Error::*,
         test::AsyncExactRead,
-        Socks5,
+        Stage,
     };
 
     #[tokio::test]
@@ -102,7 +102,7 @@ mod tests {
 
         let forward = connect.run::<_, TcpStream>(&mut server).await.unwrap();
         assert!(matches!(forward,
-                Socks5::Forward(forward) if forward.0.peer_addr().unwrap() == "14.119.104.254:80".parse().unwrap()));
+                Stage::Forward(forward) if forward.0.peer_addr().unwrap() == "14.119.104.254:80".parse().unwrap()));
 
         let response = client.read_exact_bytes::<10>().await.unwrap();
         assert_eq!(response[..4], [VER, OK, RSV, IPV4]);

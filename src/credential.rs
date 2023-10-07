@@ -5,7 +5,7 @@ use crate::{
     constant::{OK, VER},
     error::Error,
     marker::{Stream, UnpinAsyncRead},
-    read_vec_u8, Result, Socks5,
+    read_vec_u8, Result, Stage,
 };
 
 #[derive(Debug, PartialEq)]
@@ -26,13 +26,13 @@ impl Credential {
         }
     }
 
-    pub async fn run<S: Stream, U>(self, mut client: S) -> Result<Socks5<U>> {
+    pub async fn run<S: Stream, U>(self, mut client: S) -> Result<Stage<U>> {
         let (username, password) = try_extract_credential(&mut client).await?;
         if self.username.as_bytes() != username || self.password.as_bytes() != password {
             return Err(Error::BadCredential);
         }
         client.write_all(&[VER, OK]).await?;
-        Ok(Socks5::Connect(Connect))
+        Ok(Stage::Connect(Connect))
     }
 }
 
@@ -63,7 +63,7 @@ mod tests {
         credential::Credential,
         error::Error,
         test::AsyncExactRead,
-        Socks5,
+        Stage,
     };
 
     #[tokio::test]
@@ -78,7 +78,7 @@ mod tests {
         a.write_all(b"pass").await.unwrap();
 
         let result = it.run::<_, TcpStream>(b).await;
-        assert!(matches!(result, Ok(Socks5::Connect(_))));
+        assert!(matches!(result, Ok(Stage::Connect(_))));
         assert_eq!(a.read_exact_bytes().await.unwrap(), [VER, OK]);
     }
 
@@ -94,7 +94,7 @@ mod tests {
         a.write_all(b"pass").await.unwrap();
 
         let result = it.run::<_, TcpStream>(b).await;
-        assert!(matches!(result, Ok(Socks5::Connect(_))));
+        assert!(matches!(result, Ok(Stage::Connect(_))));
         assert_eq!(a.read_exact_bytes().await.unwrap(), [VER, OK]);
     }
 

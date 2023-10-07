@@ -31,25 +31,25 @@ type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub async fn start(port: u16) -> Result<()> {
     let server = TcpListener::bind(format!("127.0.0.1:{port}")).await?;
     loop {
-        tokio::spawn(Socks5::starts(server.accept().await?.0));
+        tokio::spawn(Stage::starts(server.accept().await?.0));
     }
 }
 
 #[derive(Debug)]
-enum Socks5<U = TcpStream> {
+enum Stage<U = TcpStream> {
     Negotiation(Negotiation),
     Authentication(Credential),
     Connect(Connect),
     Forward(Forward<U>),
 }
 
-impl Socks5 {
+impl Stage {
     pub async fn starts<S: Stream>(client: S) -> IOResult<()> {
         Self::process(client).await
     }
 }
 
-impl<'a, U> Socks5<U>
+impl<'a, U> Stage<U>
 where
     U: for<'b> Upstream<'b> + Stream,
     <U as Upstream<'a>>::Output: Future<Output = IOResult<U>>,
@@ -80,10 +80,10 @@ where
         }
 
         match self {
-            Socks5::Negotiation(stage) => Continue(stage.run(client).await),
-            Socks5::Authentication(credential) => Continue(credential.run(client).await),
-            Socks5::Connect(stage) => Continue(stage.run(client).await),
-            Socks5::Forward(stage) => Break(try_await!(stage.run(client))),
+            Stage::Negotiation(stage) => Continue(stage.run(client).await),
+            Stage::Authentication(credential) => Continue(credential.run(client).await),
+            Stage::Connect(stage) => Continue(stage.run(client).await),
+            Stage::Forward(stage) => Break(try_await!(stage.run(client))),
         }
     }
 }
